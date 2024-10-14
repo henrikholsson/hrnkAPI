@@ -1,0 +1,57 @@
+name: Provision and Deploy .NET API to Azure
+
+on:
+  push:
+    branches:
+      - main  # This triggers the action on push to the 'main' branch
+
+jobs:
+  provision-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the code
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Log in to Azure CLI using a service principal
+    - name: 'Log in to Azure'
+      uses: azure/login@v1
+      with:
+        creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+    # Provision resources using Bicep
+    - name: 'Provision Azure Resources with Bicep'
+      run: |
+        az deployment group create \
+          --resource-group m1-pumpernickle-rg \
+          --template-file ./resources.bicep \
+          --parameters appServiceName=hnrk-api location=norwayeast
+
+    # Setup .NET Core SDK
+    - name: Set up .NET Core
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'  # Specify your .NET version
+
+    # Restore dependencies
+    - name: Restore dependencies
+      run: dotnet restore
+
+    # Build the project
+    - name: Build the project
+      run: dotnet build --configuration Release
+
+    # Publish the project
+    - name: Publish the project
+      run: dotnet publish -c Release -o ./publish
+
+    # Deploy to Azure Web App
+    - name: 'Deploy to Azure WebApp'
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: 'hnrk-api'  # Replace with your Azure App Service name
+        slot-name: 'production'
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}  # Azure publish profile secret
+        package: ./publish
+
